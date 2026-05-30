@@ -15,9 +15,14 @@ const url = process.env.MONGO_URL;
 
 const app = express();
 const server = http.createServer(app);
+
+const allowedOrigins = process.env.FRONTEND_URLS 
+  ? process.env.FRONTEND_URLS.split(",") 
+  : ["http://localhost:3000", "http://localhost:3001"];
+
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -27,7 +32,7 @@ const authRoute = require("./Routes/AuthRoute");
 const { userVerification } = require("./Middlewares/AuthMiddleware");
 
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 }));
