@@ -230,12 +230,22 @@ app.get("/allOrders", userVerification, async (req, res) => {
   return res.status(200).json(allOrders);
 });
 
+// Helper functions for safe financial math using scaled integers (cents/paise)
+// to completely prevent floating-point representation errors (e.g. 0.1 + 0.2 = 0.30000000000000004)
+const toCents = (amount) => Math.round(Number(amount) * 100);
+const fromCents = (cents) => Number((cents / 100).toFixed(2));
+
 app.post("/newOrder", userVerification, async (req, res) => {
   try {
     const user = await UserModel.findById(req.user.id);
-    const orderValue = Number(req.body.qty) * Number(req.body.price);
+    const qty = Number(req.body.qty);
+    const priceCents = toCents(req.body.price);
+    const orderValueCents = qty * priceCents;
+    const orderValue = fromCents(orderValueCents);
 
-    if (req.body.mode === "BUY" && user.balance < orderValue) {
+    const userBalanceCents = toCents(user.balance);
+
+    if (req.body.mode === "BUY" && userBalanceCents < orderValueCents) {
       return res.status(400).json({ message: "Insufficient funds", success: false });
     }
 
@@ -256,18 +266,19 @@ app.post("/newOrder", userVerification, async (req, res) => {
         name: req.body.name 
       });
 
-      user.balance -= orderValue;
+      // Safely subtract balance in cents
+      user.balance = fromCents(userBalanceCents - orderValueCents);
       await user.save();
 
       if (existingHolding) {
-        const totalQty = existingHolding.qty + Number(req.body.qty);
+        const totalQty = existingHolding.qty + qty;
       
-        // new avg = ((old qnty*old avg) + (new qnty*new avg))/ total qnty
-
-        const newAvg = ((existingHolding.qty * existingHolding.avg) + (Number(req.body.qty) * Number(req.body.price))) / totalQty;
+        // new avg = ((old qnty * old avg) + (new qnty * new avg)) / total qnty
+        const existingAvgCents = toCents(existingHolding.avg);
+        const newAvgCents = Math.round(((existingHolding.qty * existingAvgCents) + (qty * priceCents)) / totalQty);
         
         existingHolding.qty = totalQty;
-        existingHolding.avg = newAvg;
+        existingHolding.avg = fromCents(newAvgCents);
         await existingHolding.save();
       } else {
         await HoldingsModel.create({
@@ -286,14 +297,15 @@ app.post("/newOrder", userVerification, async (req, res) => {
         name: req.body.name 
       });
 
-      if (!existingHolding || existingHolding.qty < Number(req.body.qty)) {
+      if (!existingHolding || existingHolding.qty < qty) {
         return res.status(400).json({ message: "Insufficient quantity to sell", success: false });
       }
 
-      user.balance += orderValue;
+      // Safely add balance in cents
+      user.balance = fromCents(userBalanceCents + orderValueCents);
       await user.save();
 
-      const totalQty = existingHolding.qty - Number(req.body.qty);
+      const totalQty = existingHolding.qty - qty;
       
       if (totalQty === 0) {
         await HoldingsModel.deleteOne({ _id: existingHolding._id });
@@ -305,6 +317,7 @@ app.post("/newOrder", userVerification, async (req, res) => {
 
     return res.status(201).json({ message: "Order saved successfully", success: true });
   } catch (error) {
+    console.error("Error saving order:", error);
     return res.status(500).json({ message: "Failed to save order", success: false });
   }
 });

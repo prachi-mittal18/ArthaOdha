@@ -12,26 +12,25 @@ export const UserProvider = ({ children }) => {
   const socket = useRef(null);
 
   const fetchUserData = () => {
-    api
+    return api
       .post("/verify")
       .then((res) => {
         if (res.data && res.data.status) {
           setUserData({ username: res.data.user, balance: Number(res.data.balance) || 0 });
         }
-      })
-      .finally(() => setIsLoading(false));
+      });
   };
 
   const fetchHoldings = () => {
-    api
+    return api
       .get("/allHoldings")
       .then((res) => setAllHoldings(res.data))
       .catch((err) => console.error("Error fetching holdings:", err));
   };
 
   useEffect(() => {
-    fetchUserData();
-    fetchHoldings();
+    Promise.all([fetchUserData(), fetchHoldings()])
+      .finally(() => setIsLoading(false));
 
     // Centralized socket connection
     socket.current = io("http://localhost:3002", { withCredentials: true });

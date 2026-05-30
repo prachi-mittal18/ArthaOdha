@@ -3,7 +3,10 @@ import api from "../api/api";
 import Home from "./Home";
 
 const PrivateRoute = () => {
-  const [authStatus, setAuthStatus] = useState(null); // null = loading, true = authorized, false = not
+  const [authStatus, setAuthStatus] = useState(() => {
+    // If token exists, optimistically assume true so that Home renders and can show loading skeletons
+    return localStorage.getItem("token") ? true : null;
+  });
 
   useEffect(() => {
     // Verify JWT via backend endpoint

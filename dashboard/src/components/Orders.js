@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/api";
+import Skeleton from "@mui/material/Skeleton";
 
 const Orders = () => {
   const [allOrders, setAllOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     api
@@ -13,8 +15,41 @@ const Orders = () => {
       })
       .catch((err) => {
         console.error("Error fetching orders:", err);
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   }, []);
+
+  if (isLoading) {
+    return (
+      <div className="orders">
+        <h3 className="title"><Skeleton width={120} height={30} /></h3>
+        <div className="order-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Instrument</th>
+                <th>Qty.</th>
+                <th>Price</th>
+                <th>Mode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(new Array(5)).map((_, index) => (
+                <tr key={index}>
+                  <td><Skeleton width={80} /></td>
+                  <td><Skeleton width={40} /></td>
+                  <td><Skeleton width={60} /></td>
+                  <td><Skeleton width={50} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="orders">
