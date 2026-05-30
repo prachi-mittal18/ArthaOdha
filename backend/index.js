@@ -3,16 +3,28 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const { HoldingsModel } = require("./model/HoldingsModel");
 const { PositionsModel } = require("./model/PositionsModel");
 const { OrdersModel } = require("./model/OrdersModel");
+const { UserModel } = require("./model/UserModel");
 const PORT = process.env.PORT || 3002;
 const url = process.env.MONGO_URL;
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
 const cookieParser = require("cookie-parser");
 const authRoute = require("./Routes/AuthRoute");
+const { userVerification } = require("./Middlewares/AuthMiddleware");
 
 app.use(cors({
   origin: ["http://localhost:3000", "http://localhost:3001"],
@@ -24,7 +36,6 @@ app.use(cookieParser());
 app.use(express.json());
 
 app.use("/", authRoute);
-app.use(bodyParser.json());
 
 // app.get("/addHoldings" , async(req,res)=>{
 // let tempHolding = [
@@ -196,29 +207,133 @@ app.use(bodyParser.json());
 // res.send("new positions added");
 // });
 
-app.get("/allHoldings", async (req, res) => {
-  let allHoldings = await HoldingsModel.find({});
-  res.json(allHoldings);
+app.get("/allHoldings", userVerification, async (req, res) => {
+  // Professional approach: Filter by the authenticated user's ID
+  // This assumes you've added user: { type: Schema.Types.ObjectId, ref: 'user' } to your model
+  const allHoldings = await HoldingsModel.find({ user: req.user.id });
+  return res.status(200).json(allHoldings);
 });
 
-app.get("/allPositions", async (req, res) => {
-  let allPositions = await PositionsModel.find({});
-  res.json(allPositions);
+app.get("/allPositions", userVerification, async (req, res) => {
+  // Always isolate data to the logged-in user
+  const allPositions = await PositionsModel.find({ user: req.user.id });
+  return res.status(200).json(allPositions);
 });
 
-app.post("/newOrder", async (req, res) => {
-  let newOrder = new OrdersModel({
-    name: req.body.name,
-    qty: req.body.qty,
-    mode: req.body.mode,
-    price: req.body.price,
+app.get("/allOrders", userVerification, async (req, res) => {
+  const allOrders = await OrdersModel.find({ user: req.user.id });
+  return res.status(200).json(allOrders);
+});
+
+app.post("/newOrder", userVerification, async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.user.id);
+    const orderValue = Number(req.body.qty) * Number(req.body.price);
+
+    if (req.body.mode === "BUY" && user.balance < orderValue) {
+      return res.status(400).json({ message: "Insufficient funds", success: false });
+    }
+
+    const newOrder = new OrdersModel({
+      name: req.body.name,
+      qty: req.body.qty,
+      mode: req.body.mode,
+      price: req.body.price,
+      user: req.user.id, // Associate the order with the person who placed it
+    });
+
+    await newOrder.save();
+
+    // Logic to update Holdings based on the order
+    if (req.body.mode === "BUY") {
+      const existingHolding = await HoldingsModel.findOne({ 
+        user: req.user.id, 
+        name: req.body.name 
+      });
+
+      user.balance -= orderValue;
+      await user.save();
+
+      if (existingHolding) {
+        const totalQty = existingHolding.qty + Number(req.body.qty);
+      
+        // new avg = ((old qnty*old avg) + (new qnty*new avg))/ total qnty
+
+        const newAvg = ((existingHolding.qty * existingHolding.avg) + (Number(req.body.qty) * Number(req.body.price))) / totalQty;
+        
+        existingHolding.qty = totalQty;
+        existingHolding.avg = newAvg;
+        await existingHolding.save();
+      } else {
+        await HoldingsModel.create({
+          name: req.body.name,
+          qty: req.body.qty,
+          avg: req.body.price,
+          price: req.body.price, // Market price at time of buy
+          user: req.user.id,
+          net: "0%",
+          day: "0%"
+        });
+      }
+    } else if (req.body.mode === "SELL") {
+      const existingHolding = await HoldingsModel.findOne({ 
+        user: req.user.id, 
+        name: req.body.name 
+      });
+
+      if (!existingHolding || existingHolding.qty < Number(req.body.qty)) {
+        return res.status(400).json({ message: "Insufficient quantity to sell", success: false });
+      }
+
+      user.balance += orderValue;
+      await user.save();
+
+      const totalQty = existingHolding.qty - Number(req.body.qty);
+      
+      if (totalQty === 0) {
+        await HoldingsModel.deleteOne({ _id: existingHolding._id });
+      } else {
+        existingHolding.qty = totalQty;
+        await existingHolding.save();
+      }
+    }
+
+    return res.status(201).json({ message: "Order saved successfully", success: true });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to save order", success: false });
+  }
+});
+
+// Simulated Live Price Ticker
+setInterval(() => {
+  const priceUpdate = {
+    "NIFTY 50": (18000 + Math.random() * 100).toFixed(2),
+    "SENSEX": (60000 + Math.random() * 200).toFixed(2),
+    "INFY": (1500 + Math.random() * 10).toFixed(2),
+    "TCS": (3200 + Math.random() * 15).toFixed(2),
+    "RELIANCE": (2500 + Math.random() * 5).toFixed(2),
+  };
+  io.emit("priceUpdate", priceUpdate);
+}, 2000); // Send updates every 2 seconds
+
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
   });
-  newOrder.save();
-  res.send("order saved.");
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log("app started ");
-  mongoose.connect(url);
-  console.log("DB connected ");
+  mongoose.connect(url).then(async () => {
+    console.log("DB connected ");
+    // One-time migration: set balance for existing users who don't have it
+    const result = await UserModel.updateMany(
+      { balance: { $exists: false } },
+      { $set: { balance: 100000 } }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`Migrated balance for ${result.modifiedCount} existing user(s).`);
+    }
+  });
 });

@@ -4,19 +4,15 @@ import api from "../api/api";
 import GeneralContext from "./GeneralContext";
 import UserContext from "./UserContext";
 import toast from "react-hot-toast";
-import "./BuyActionWindow.css";
+import "./BuyActionWindow.css"; // Reusing styles, you can add .sell-window classes here
 
-const BuyActionWindow = ({ uid }) => {
+const SellActionWindow = ({ uid }) => {
   const [stockQuantity, setStockQuantity] = useState(1);
   const [stockPrice, setStockPrice] = useState(0.0);
   const generalContext = useContext(GeneralContext);
-  const { balance, refreshUserData, refreshHoldings } = useContext(UserContext);
+  const { refreshUserData, refreshHoldings } = useContext(UserContext);
 
-  const handleBuyClick = () => {
-    const totalCost = stockQuantity * stockPrice;
-    if (stockQuantity <= 0) return toast.error("Quantity must be greater than 0");
-    if (totalCost > balance) return toast.error("Insufficient funds");
-
+  const handleSellClick = () => {
     api
       .post(
         "/newOrder",
@@ -24,27 +20,27 @@ const BuyActionWindow = ({ uid }) => {
           name: uid,
           qty: stockQuantity,
           price: stockPrice,
-          mode: "BUY",
+          mode: "SELL",
         }
       )
       .then(() => {
-        toast.success(`Bought ${stockQuantity} shares of ${uid}`);
+        toast.success(`Sold ${stockQuantity} shares of ${uid}`);
         refreshUserData();
         refreshHoldings();
-        generalContext.closeBuyWindow();
+        generalContext.closeSellWindow();
       })
       .catch((err) => {
-        const msg = err.response?.data?.message || "Buy order failed";
+        const msg = err.response?.data?.message || "Sell order failed";
         toast.error(msg);
       });
   };
 
   const handleCancelClick = () => {
-    generalContext.closeBuyWindow();
+    generalContext.closeSellWindow();
   };
 
   return (
-    <div className="buy-window-container" id="buy-window" draggable="true">
+    <div className="buy-window-container sell-window" id="sell-window">
       <div className="regular-order">
         <div className="inputs">
           <fieldset>
@@ -52,7 +48,6 @@ const BuyActionWindow = ({ uid }) => {
             <input
               type="number"
               name="qty"
-              id="qty"
               onChange={(e) => setStockQuantity(e.target.value)}
               value={stockQuantity}
             />
@@ -62,7 +57,6 @@ const BuyActionWindow = ({ uid }) => {
             <input
               type="number"
               name="price"
-              id="price"
               step="0.05"
               onChange={(e) => setStockPrice(e.target.value)}
               value={stockPrice}
@@ -72,10 +66,10 @@ const BuyActionWindow = ({ uid }) => {
       </div>
 
       <div className="buttons">
-        <span>Margin required ₹140.65</span>
+        <span>Proceeds: ₹{(stockQuantity * stockPrice).toFixed(2)}</span>
         <div>
-          <Link className="btn btn-blue" onClick={handleBuyClick}>
-            Buy
+          <Link className="btn btn-red" onClick={handleSellClick}>
+            Sell
           </Link>
           <Link to="" className="btn btn-grey" onClick={handleCancelClick}>
             Cancel
@@ -86,4 +80,4 @@ const BuyActionWindow = ({ uid }) => {
   );
 };
 
-export default BuyActionWindow;
+export default SellActionWindow;

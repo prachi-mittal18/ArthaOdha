@@ -1,10 +1,25 @@
-import React from "react";
+import React, { useContext } from "react";
+import UserContext from "./UserContext";
 
 const Summary = () => {
+  const { username, balance, allHoldings } = useContext(UserContext);
+
+  const { totalInvestment, currentTotalValue } = allHoldings.reduce(
+    (acc, stock) => {
+      acc.totalInvestment += stock.avg * stock.qty;
+      acc.currentTotalValue += stock.price * stock.qty;
+      return acc;
+    },
+    { totalInvestment: 0, currentTotalValue: 0 }
+  );
+
+  const totalPL = currentTotalValue - totalInvestment;
+  const pnlClass = totalPL >= 0 ? "profit" : "loss";
+
   return (
     <>
       <div className="username">
-        <h6>Hi, User!</h6>
+        <h6>Hi, {username}!</h6>
         <hr className="divider" />
       </div>
 
@@ -15,7 +30,7 @@ const Summary = () => {
 
         <div className="data">
           <div className="first">
-            <h3>3.74k</h3>
+            <h3>{(balance / 1000).toFixed(2)}k</h3>
             <p>Margin available</p>
           </div>
           <hr />
@@ -25,7 +40,7 @@ const Summary = () => {
               Margins used <span>0</span>{" "}
             </p>
             <p>
-              Opening balance <span>3.74k</span>{" "}
+              Opening balance <span>{(balance / 1000).toFixed(2)}k</span>{" "}
             </p>
           </div>
         </div>
@@ -34,13 +49,13 @@ const Summary = () => {
 
       <div className="section">
         <span>
-          <p>Holdings (13)</p>
+          <p>Holdings ({allHoldings.length})</p>
         </span>
 
         <div className="data">
           <div className="first">
-            <h3 className="profit">
-              1.55k <small>+5.20%</small>{" "}
+            <h3 className={pnlClass}>
+              {(totalPL / 1000).toFixed(2)}k <small>{totalInvestment > 0 ? ((totalPL / totalInvestment) * 100).toFixed(2) : "0.00"}%</small>{" "}
             </h3>
             <p>P&L</p>
           </div>
@@ -48,10 +63,10 @@ const Summary = () => {
 
           <div className="second">
             <p>
-              Current Value <span>31.43k</span>{" "}
+              Current Value <span>{(currentTotalValue / 1000).toFixed(2)}k</span>{" "}
             </p>
             <p>
-              Investment <span>29.88k</span>{" "}
+              Investment <span>{(totalInvestment / 1000).toFixed(2)}k</span>{" "}
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../api/api";
 import { ToastContainer, toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -31,12 +31,11 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await axios.post(
-        "http://localhost:3002/login",
+      const { data } = await api.post(
+        "/login",
         {
           ...inputValue,
-        },
-        { withCredentials: true }
+        }
       );
       console.log(data);
       const { success, message } = data;
@@ -50,6 +49,8 @@ const Login = () => {
       }
     } catch (error) {
       console.log(error);
+      const errorMessage = error.response?.data?.message || "Something went wrong. Please try again.";
+      handleError(errorMessage);
     }
     setInputValue({
       ...inputValue,

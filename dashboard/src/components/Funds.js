@@ -1,7 +1,10 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Link } from "react-router-dom";
+import UserContext from "./UserContext";
 
 const Funds = () => {
+  const { balance } = useContext(UserContext);
+
   return (
     <>
       <div className="funds">
@@ -19,28 +22,20 @@ const Funds = () => {
           <div className="table">
             <div className="data">
               <p>Available margin</p>
-              <p className="imp colored">4,043.10</p>
+              <p className="imp colored">{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="data">
               <p>Used margin</p>
-              <p className="imp">3,757.30</p>
+              <p className="imp">0.00</p>
             </div>
             <div className="data">
               <p>Available cash</p>
-              <p className="imp">4,043.10</p>
+              <p className="imp">{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <hr />
             <div className="data">
               <p>Opening Balance</p>
-              <p>4,043.10</p>
-            </div>
-            <div className="data">
-              <p>Opening Balance</p>
-              <p>3736.40</p>
-            </div>
-            <div className="data">
-              <p>Payin</p>
-              <p>4064.00</p>
+              <p>{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="data">
               <p>SPAN</p>

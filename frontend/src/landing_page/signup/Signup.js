@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../api/api";
 import { ToastContainer, toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -32,24 +32,25 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await axios.post(
-        "http://localhost:3002/signup",
+      const { data } = await api.post(
+        "/signup",
         {
           ...inputValue,
-        },
-        { withCredentials: true }
+        }
       );
       const { success, message } = data;
       if (success) {
         handleSuccess(message);
         setTimeout(() => {
-          navigate("/");
+          window.location.href = "http://localhost:3000";
         }, 2000);
       } else {
         handleError(message);
       }
     } catch (error) {
       console.log(error);
+      const errorMessage = error.response?.data?.message || "Something went wrong. Please try again.";
+      handleError(errorMessage);
     }
     setInputValue({
       ...inputValue,

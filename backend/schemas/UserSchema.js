@@ -19,10 +19,16 @@ const UserSchema = new Schema({
     type: Date,
     default: new Date(),
   },
+  balance: {
+    type: Number,
+    default: 100000,
+  },
 });
 
-UserSchema.pre("save", async function () {
+UserSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  next();
 });
 
 module.exports = { UserSchema };
