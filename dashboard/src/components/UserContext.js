@@ -5,20 +5,31 @@ import { io } from "socket.io-client";
 const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  const [userData, setUserData] = useState({ username: "User", balance: 0 });
+  const [userData, setUserData] = useState({ username: "User", email: "", balance: 0, marginUsed: 0, openingBalance: 0 });
   const [allHoldings, setAllHoldings] = useState([]);
   const [prices, setPrices] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const socket = useRef(null);
 
-  const fetchUserData = () => {
-    return api
-      .post("/verify")
-      .then((res) => {
-        if (res.data && res.data.status) {
-          setUserData({ username: res.data.user, balance: Number(res.data.balance) || 0 });
-        }
-      });
+  const fetchUserData = async () => {
+    try {
+      const [verifyRes, fundsRes] = await Promise.all([
+        api.post("/verify"),
+        api.get("/user/funds")
+      ]);
+
+      if (verifyRes.data && verifyRes.data.status) {
+        setUserData({
+          username: verifyRes.data.user,
+          email: verifyRes.data.email,
+          balance: fundsRes.data.balance,
+          marginUsed: fundsRes.data.marginUsed,
+          openingBalance: fundsRes.data.openingBalance
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching user data:", err);
+    }
   };
 
   const fetchHoldings = () => {

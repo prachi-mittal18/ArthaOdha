@@ -105,7 +105,7 @@ const Holdings = () => {
               const curValue = stock.price * stock.qty;
               const isProfit = curValue - stock.avg * stock.qty >= 0.0;
               const profClass = isProfit ? "profit" : "loss";
-              const dayClass = stock.isLoss ? "loss" : "profit";
+              const netChg = ((stock.price - stock.avg) / stock.avg) * 100;
 
               return (
                 <tr key={index}>
@@ -117,8 +117,8 @@ const Holdings = () => {
                   <td className={profClass}>
                     {(curValue - stock.avg * stock.qty).toFixed(2)}
                   </td>
-                  <td className={profClass}>{stock.net}</td>
-                  <td className={dayClass}>{stock.day}</td>
+                  <td className={profClass}>{netChg.toFixed(2)}%</td>
+                  <td className="profit">0.00%</td>
                 </tr>
               );
             })}

@@ -2,7 +2,7 @@ import React, { useContext } from "react";
 import UserContext from "./UserContext";
 
 const Summary = () => {
-  const { username, balance, allHoldings } = useContext(UserContext);
+  const { username, balance, marginUsed, openingBalance, allHoldings } = useContext(UserContext);
 
   const { totalInvestment, currentTotalValue } = allHoldings.reduce(
     (acc, stock) => {
@@ -37,10 +37,10 @@ const Summary = () => {
 
           <div className="second">
             <p>
-              Margins used <span>0</span>{" "}
+              Margins used <span>{marginUsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>{" "}
             </p>
             <p>
-              Opening balance <span>{(balance / 1000).toFixed(2)}k</span>{" "}
+              Opening balance <span>{(openingBalance / 1000).toFixed(2)}k</span>{" "}
             </p>
           </div>
         </div>

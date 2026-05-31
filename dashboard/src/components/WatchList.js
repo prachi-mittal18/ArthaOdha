@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from "react";
+import toast from "react-hot-toast";
 
 import axios from "axios";
 
@@ -73,7 +74,7 @@ const WatchList = () => {
   };
 
   return (
-    <div className="watchlist-container">
+    <div className="watchlist-container" style={{ display: "flex", flexDirection: "column", height: "100vh", borderRight: "1px solid #eee" }}>
       <div className="search-container">
         <input
           type="text"
@@ -87,13 +88,15 @@ const WatchList = () => {
         <span className="counts"> {filteredWatchlist.length} / 50</span>
       </div>
 
-      <ul className="list">
+      <ul className="list" style={{ flex: 1, overflowY: "auto", borderBottom: "1px solid #eee" }}>
         {filteredWatchlist.map((stock, index) => {
           return <WatchListItem stock={stock} key={index} />;
         })}
       </ul>
 
-      <DoughnutChart data={data} />
+      <div className="watchlist-graph-container" style={{ padding: "20px" }}>
+        <DoughnutChart data={data} />
+      </div>
     </div>
   );
 };
@@ -112,9 +115,9 @@ const WatchListItem = ({ stock }) => {
   };
 
   return (
-    <li onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <li onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} style={{ padding: "14px 10px", borderBottom: "1px solid #f3f3f3" }}>
       <div className="item">
-        <p className={stock.isDown ? "down" : "up"}>{stock.name}</p>
+        <p className={stock.isDown ? "down" : "up"} style={{ fontWeight: "600", fontSize: "0.95rem" }}>{stock.name}</p>
         <div className="itemInfo">
           <span className="percent">{stock.percent}</span>
           {stock.isDown ? (
@@ -133,12 +136,35 @@ const WatchListItem = ({ stock }) => {
 const WatchListActions = ({ uid }) => {
   const generalContext = useContext(GeneralContext);
 
+  const buttonStyle = {
+    padding: "4px 8px",
+    margin: "0 2px",
+    border: "none",
+    borderRadius: "3px",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "11px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    verticalAlign: "middle",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+  };
+
   const handleBuyClick = () => {
     generalContext.openBuyWindow(uid);
   };
 
   const handleSellClick = () => {
     generalContext.openSellWindow(uid);
+  };
+
+  const handleAnalyticsClick = () => {
+    toast(`Loading detailed charts for ${uid}...`, { icon: '📊' });
+  };
+
+  const handleMoreClick = () => {
+    toast(`Advanced options for ${uid} coming soon!`, { icon: '⚙️' });
   };
 
   return (
@@ -149,18 +175,28 @@ const WatchListActions = ({ uid }) => {
           placement="top"
           arrow
           TransitionComponent={Grow}
-          onClick={handleBuyClick}
         >
-          <button className="buy">Buy</button>
+          <button 
+            className="buy" 
+            style={{ ...buttonStyle, backgroundColor: "#4184f3", color: "white" }}
+            onClick={handleBuyClick}
+          >
+            Buy
+          </button>
         </Tooltip>
         <Tooltip
           title="Sell (S)"
           placement="top"
           arrow
           TransitionComponent={Grow}
-          onClick={handleSellClick}
         >
-          <button className="sell">Sell</button>
+          <button 
+            className="sell" 
+            style={{ ...buttonStyle, backgroundColor: "#ff5722", color: "white" }}
+            onClick={handleSellClick}
+          >
+            Sell
+          </button>
         </Tooltip>
         <Tooltip
           title="Analytics (A)"
@@ -168,12 +204,25 @@ const WatchListActions = ({ uid }) => {
           arrow
           TransitionComponent={Grow}
         >
-          <button className="action">
+          <button 
+            className="action" 
+            style={{ ...buttonStyle, backgroundColor: "#e0e0e0", color: "#444" }}
+            onClick={handleAnalyticsClick}
+          >
             <BarChartOutlined className="icon" />
           </button>
         </Tooltip>
-        <Tooltip title="More" placement="top" arrow TransitionComponent={Grow}>
-          <button className="action">
+        <Tooltip 
+          title="More" 
+          placement="top" 
+          arrow 
+          TransitionComponent={Grow}
+        >
+          <button 
+            className="action" 
+            style={{ ...buttonStyle, backgroundColor: "#e0e0e0", color: "#444" }}
+            onClick={handleMoreClick}
+          >
             <MoreHoriz className="icon" />
           </button>
         </Tooltip>

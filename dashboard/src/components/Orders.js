@@ -29,19 +29,23 @@ const Orders = () => {
           <table>
             <thead>
               <tr>
+                <th>Time</th>
                 <th>Instrument</th>
                 <th>Qty.</th>
                 <th>Price</th>
                 <th>Mode</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {Array.from(new Array(5)).map((_, index) => (
                 <tr key={index}>
+                  <td><Skeleton width={60} /></td>
                   <td><Skeleton width={80} /></td>
                   <td><Skeleton width={40} /></td>
                   <td><Skeleton width={60} /></td>
                   <td><Skeleton width={50} /></td>
+                  <td><Skeleton width={70} /></td>
                 </tr>
               ))}
             </tbody>
@@ -67,19 +71,32 @@ const Orders = () => {
             <table>
               <thead>
                 <tr>
+                  <th>Time</th>
                   <th>Instrument</th>
                   <th>Qty.</th>
                   <th>Price</th>
                   <th>Mode</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {allOrders.map((order, index) => (
                   <tr key={index}>
+                    <td>
+                      {order.createdAt 
+                        ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
+                        : "--:--"
+                      }
+                    </td>
                     <td>{order.name}</td>
                     <td>{order.qty}</td>
                     <td>{order.price.toFixed(2)}</td>
                     <td>{order.mode}</td>
+                    <td>
+                      <span className={order.status === "COMPLETE" ? "profit" : "loss"}>
+                        {order.status}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
