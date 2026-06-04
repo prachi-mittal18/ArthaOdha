@@ -4,7 +4,8 @@ import Home from "./Home";
 
 const PrivateRoute = () => {
   const [authStatus, setAuthStatus] = useState(() => {
-    // If token exists, optimistically assume true so that Home renders and can show loading skeletons
+    // Auth Strategy: Token is stored in HTTP-only cookie for secure backend requests
+    // and localStorage for optimistic UI rendering/state.
     return localStorage.getItem("token") ? true : null;
   });
 

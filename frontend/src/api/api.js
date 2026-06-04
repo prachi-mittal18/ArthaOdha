@@ -33,14 +33,17 @@ api.interceptors.response.use(
   (error) => {
     if (error.response) {
       const { status } = error.response;
+      const isAuthRequest = error.config.url.includes("/login") || 
+                            error.config.url.includes("/signup") || 
+                            error.config.url.includes("/verify");
 
       if (status === 401) {
-        // Session expired or unauthorized
-        console.warn("Unauthorized! Clearing session and redirecting...");
         localStorage.removeItem("token");
 
-        // Only redirect if not already on an auth page to avoid loops
-        if (!window.location.pathname.includes("/login") && !window.location.pathname.includes("/signup")) {
+        // Only redirect if this wasn't a deliberate auth check/attempt
+        // and we aren't already on the login page
+        if (!isAuthRequest && !window.location.pathname.includes("/login")) {
+          console.warn("Unauthorized! Redirecting to login...");
           window.location.href = "/login";
         }
       }
