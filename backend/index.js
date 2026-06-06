@@ -6,12 +6,59 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 const FinnhubService = require("./services/FinnhubService");
+const axios = require("axios");
 
 const { HoldingsModel } = require("./model/HoldingsModel");
 const { PositionsModel } = require("./model/PositionsModel");
 const { OrdersModel } = require("./model/OrdersModel");
 const { UserModel } = require("./model/UserModel");
 const PORT = process.env.PORT || 3002;
+
+/**
+ * Configuration & Helpers
+ */
+
+// Helper functions for safe financial math using scaled integers (cents/paise)
+const toCents = (amount) => Math.round(Number(amount) * 100);
+const fromCents = (cents) => Number((cents / 100).toFixed(2));
+
+
+// Mapping internal tickers to Finnhub NSE Symbols
+const watchlistMap = {
+  "INFY": "INFY.NS", "TCS": "TCS.NS", "RELIANCE": "RELIANCE.NS",
+  "BHARTIARTL": "BHARTIARTL.NS", "HDFCBANK": "HDFCBANK.NS", "ITC": "ITC.NS",
+  "TATAPOWER": "TATAPOWER.NS", "WIPRO": "WIPRO.NS", "M&M": "M&M.NS",
+  "HINDUNILVR": "HINDUNILVR.NS", "SBIN": "SBIN.NS", "KPITTECH": "KPITTECH.NS",
+  "QUICKHEAL": "QUICKHEAL.NS", "ONGC": "ONGC.NS", "ICICIBANK": "ICICIBANK.NS",
+  "AXISBANK": "AXISBANK.NS", "KOTAKBANK": "KOTAKBANK.NS", "LT": "LT.NS",
+  "BAJFINANCE": "BAJFINANCE.NS", "MARUTI": "MARUTI.NS", "SUNPHARMA": "SUNPHARMA.NS",
+  "DRREDDY": "DRREDDY.NS", "CIPLA": "CIPLA.NS", "DIVISLAB": "DIVISLAB.NS",
+  "NESTLEIND": "NESTLEIND.NS", "TITAN": "TITAN.NS", "ULTRACEMCO": "ULTRACEMCO.NS",
+  "ASIANPAINT": "ASIANPAINT.NS", "BAJAJFINSV": "BAJAJFINSV.NS", "TECHM": "TECHM.NS",
+  "HCLTECH": "HCLTECH.NS", "POWERGRID": "POWERGRID.NS", "NTPC": "NTPC.NS",
+  "COALINDIA": "COALINDIA.NS", "GRASIM": "GRASIM.NS", "JSWSTEEL": "JSWSTEEL.NS",
+  "TATASTEEL": "TATASTEEL.NS", "HINDALCO": "HINDALCO.NS", "ADANIENT": "ADANIENT.NS",
+  "ADANIPORTS": "ADANIPORTS.NS"
+};
+
+// Simulated Live Price Ticker initialization
+let currentPrices = {};
+["NIFTY 50", "SENSEX", ...Object.keys(watchlistMap)].forEach(ticker => {
+  const basePrices = {
+    "NIFTY 50": 23000.45, "SENSEX": 75000.85, "INFY": 1264.80, "TCS": 3850.50,
+    "RELIANCE": 2500.10, "BHARTIARTL": 540.60, "HDFCBANK": 1520.30, "ITC": 205.15,
+    "TATAPOWER": 120.40, "WIPRO": 570.80, "M&M": 779.80,
+    "HINDUNILVR": 2417.40, "SBIN": 430.20, "KPITTECH": 266.45, "QUICKHEAL": 160.00,
+    "ONGC": 116.80, "ICICIBANK": 900.00, "AXISBANK": 850.00, "KOTAKBANK": 1800.00,
+    "LT": 2200.00, "BAJFINANCE": 6000.00, "MARUTI": 8500.00, "SUNPHARMA": 950.00,
+    "DRREDDY": 4500.00, "CIPLA": 1100.00, "DIVISLAB": 3500.00, "NESTLEIND": 19000.00,
+    "TITAN": 2500.00, "ULTRACEMCO": 7000.00, "ASIANPAINT": 2800.00, "BAJAJFINSV": 1400.00,
+    "TECHM": 1000.00, "HCLTECH": 1100.00, "POWERGRID": 220.00, "NTPC": 170.00,
+    "COALINDIA": 210.00, "GRASIM": 1600.00, "JSWSTEEL": 700.00, "TATASTEEL": 110.00,
+    "HINDALCO": 400.00, "ADANIENT": 2400.00, "ADANIPORTS": 700.00
+  };
+  currentPrices[ticker] = fromCents(toCents(basePrices[ticker] || 100.00));
+});
 
 // Normalize process.env to handle spaces in keys or values from manual .env edits
 Object.keys(process.env).forEach((key) => {
@@ -25,10 +72,6 @@ Object.keys(process.env).forEach((key) => {
 
 const url = process.env.MONGO_URL;
 const tokenKey = process.env.TOKEN_KEY;
-
-// Helper functions for safe financial math using scaled integers (cents/paise)
-const toCents = (amount) => Math.round(Number(amount) * 100);
-const fromCents = (cents) => Number((cents / 100).toFixed(2));
 
 const app = express();
 const server = http.createServer(app);
@@ -44,6 +87,7 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+
 const cookieParser = require("cookie-parser");
 const authRoute = require("./Routes/AuthRoute");
 const { userVerification } = require("./Middlewares/AuthMiddleware");
@@ -79,6 +123,80 @@ app.get("/allPositions", userVerification, async (req, res) => {
   }
 });
 
+app.get("/user/pnl-trend", userVerification, async (req, res) => {
+  try {
+    const holdings = await HoldingsModel.find({ user: req.user.id });
+    if (!holdings.length) return res.status(200).json({ labels: [], data: [] });
+
+    const to = Math.floor(Date.now() / 1000);
+    const from = to - 10 * 24 * 60 * 60; // Fetch 10 days to ensure 7 trading days
+    const trendMap = {}; // date -> totalPnL
+
+    // Generate stable date keys for the mock fallback
+    const dates = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().split('T')[0]); // Use YYYY-MM-DD for stable keys
+    }
+
+    let fallbackTriggered = false;
+
+    // Sequential fetch for demo; in production, use a caching layer or batch service
+    for (const stock of holdings) {
+      const symbol = watchlistMap[stock.name] || `${stock.name}.NS`;
+      try {
+        const response = await axios.get(`https://finnhub.io/api/v1/stock/candle`, {
+          params: { symbol, resolution: 'D', from, to, token: process.env.FINNHUB_API_KEY }
+        });
+
+        // Fallback for 403/No Data: Generate mock historical trend if API is restricted
+        if (!response.data || response.data.s === "no_data" || !response.data.c) {
+          throw new Error("API restricted or no data");
+        }
+
+        response.data.c.forEach((price, idx) => {
+          const date = new Date(response.data.t[idx] * 1000).toISOString().split('T')[0];
+          const pnl = (price - stock.avg) * stock.qty;
+          trendMap[date] = (trendMap[date] || 0) + pnl;
+        });
+      } catch (e) { 
+        fallbackTriggered = true;
+        
+        // Generate stable mock historical P&L based on current price
+        const currentPrice = currentPrices[stock.name] || stock.avg;
+        const tickerHash = stock.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+        // Ensure every date in our range has a value even if API fails
+        dates.forEach((date, i) => {
+          // Deterministic variance based on ticker name and day index to stop graph jitter
+          const variance = ((tickerHash * (i + 1)) % 40) / 1000; // 0 to 0.04 (4% range)
+          const direction = (tickerHash % 2 === 0) ? 1 : -1;
+          const mockHistoricalPrice = currentPrice * (1 + (direction * variance));
+
+          const pnl = (mockHistoricalPrice - stock.avg) * stock.qty;
+          trendMap[date] = (trendMap[date] || 0) + pnl;
+        });
+      }
+    }
+
+    if (fallbackTriggered) {
+      console.info(`[${new Date().toISOString()}] INFO: P&L Trend generated using deterministic mock fallback (API restricted).`);
+    }
+
+    // Sort by string comparison (works for YYYY-MM-DD) or date parsing
+    const sortedDates = Object.keys(trendMap).sort().slice(-7);
+    
+    // Format labels for the frontend: "Jun 1", "Jun 2", etc.
+    const labels = sortedDates.map(d => new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' }));
+    const data = sortedDates.map(d => fromCents(toCents(trendMap[d])));
+
+    return res.status(200).json({ labels, data });
+  } catch (error) {
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 app.get("/allOrders", userVerification, async (req, res) => {
   try {
     const allOrders = await OrdersModel.find({ user: req.user.id }).sort({ createdAt: -1 });
@@ -109,51 +227,6 @@ app.get("/user/funds", userVerification, async (req, res) => {
     return res.status(500).json({ message: "Error fetching funds summary", success: false });
   }
 });
-
-// Mapping internal tickers to Finnhub NSE Symbols
-// Task 5: Expanded to 40 Tickers for full market coverage
-const watchlistMap = {
-  "INFY": "INFY.NS",
-  "TCS": "TCS.NS",
-  "RELIANCE": "RELIANCE.NS",
-  "BHARTIARTL": "BHARTIARTL.NS",
-  "HDFCBANK": "HDFCBANK.NS",
-  "ITC": "ITC.NS",
-  "TATAPOWER": "TATAPOWER.NS",
-  "WIPRO": "WIPRO.NS",
-  "M&M": "M&M.NS",
-  "HINDUNILVR": "HINDUNILVR.NS", // Primary
-  "SBIN": "SBIN.NS",
-  "KPITTECH": "KPITTECH.NS",
-  "QUICKHEAL": "QUICKHEAL.NS",
-  "ONGC": "ONGC.NS",
-  "ICICIBANK": "ICICIBANK.NS",
-  "AXISBANK": "AXISBANK.NS",
-  "KOTAKBANK": "KOTAKBANK.NS",
-  "LT": "LT.NS",
-  "BAJFINANCE": "BAJFINANCE.NS",
-  "MARUTI": "MARUTI.NS",
-  "SUNPHARMA": "SUNPHARMA.NS",
-  "DRREDDY": "DRREDDY.NS",
-  "CIPLA": "CIPLA.NS",
-  "DIVISLAB": "DIVISLAB.NS",
-  "NESTLEIND": "NESTLEIND.NS",
-  "TITAN": "TITAN.NS",
-  "ULTRACEMCO": "ULTRACEMCO.NS",
-  "ASIANPAINT": "ASIANPAINT.NS",
-  "BAJAJFINSV": "BAJAJFINSV.NS",
-  "TECHM": "TECHM.NS",
-  "HCLTECH": "HCLTECH.NS",
-  "POWERGRID": "POWERGRID.NS",
-  "NTPC": "NTPC.NS",
-  "COALINDIA": "COALINDIA.NS",
-  "GRASIM": "GRASIM.NS",
-  "JSWSTEEL": "JSWSTEEL.NS",
-  "TATASTEEL": "TATASTEEL.NS",
-  "HINDALCO": "HINDALCO.NS",
-  "ADANIENT": "ADANIENT.NS",
-  "ADANIPORTS": "ADANIPORTS.NS"
-};
 
 app.post("/newOrder", userVerification, async (req, res) => {
   try {
@@ -276,27 +349,6 @@ app.post("/newOrder", userVerification, async (req, res) => {
     console.error(`[${new Date().toISOString()}] ERROR: Failed to process newOrder for user ${req.user.id}:`, error.message);
     return res.status(500).json({ message: "Failed to save order", success: false });
   }
-});
-
-// Simulated Live Price Ticker
-// These act as base prices before Finnhub or the random-walk simulation takes over
-let currentPrices = {};
-["NIFTY 50", "SENSEX", ...Object.keys(watchlistMap)].forEach(ticker => {
-  const basePrices = {
-    "NIFTY 50": 23000.45, "SENSEX": 75000.85, "INFY": 1264.80, "TCS": 3850.50,
-    "RELIANCE": 2500.10, "BHARTIARTL": 540.60, "HDFCBANK": 1520.30, "ITC": 205.15,
-    "TATAPOWER": 120.40, "WIPRO": 570.80, "M&M": 779.80,
-    "HINDUNILVR": 2417.40, "SBIN": 430.20, "KPITTECH": 266.45, "QUICKHEAL": 160.00,
-    "ONGC": 116.80, "ICICIBANK": 900.00, "AXISBANK": 850.00, "KOTAKBANK": 1800.00,
-    "LT": 2200.00, "BAJFINANCE": 6000.00, "MARUTI": 8500.00, "SUNPHARMA": 950.00,
-    "DRREDDY": 4500.00, "CIPLA": 1100.00, "DIVISLAB": 3500.00, "NESTLEIND": 19000.00,
-    "TITAN": 2500.00, "ULTRACEMCO": 7000.00, "ASIANPAINT": 2800.00, "BAJAJFINSV": 1400.00,
-    "TECHM": 1000.00, "HCLTECH": 1100.00, "POWERGRID": 220.00, "NTPC": 170.00,
-    "COALINDIA": 210.00, "GRASIM": 1600.00, "JSWSTEEL": 700.00, "TATASTEEL": 110.00,
-    "HINDALCO": 400.00, "ADANIENT": 2400.00, "ADANIPORTS": 700.00
-  };
-  // Sanitize the base price immediately on startup
-  currentPrices[ticker] = fromCents(toCents(basePrices[ticker] || 100.00));
 });
 
 const processPendingOrders = async (targetTicker = null) => {

@@ -9,6 +9,7 @@ import Orders from "./Orders";
 import Positions from "./Positions";
 import Summary from "./Summary";
 import WatchList from "./WatchList";
+import PortfolioAnalytics from "./PortfolioAnalytics";
 import { GeneralContextProvider } from "./GeneralContext";
 import { Toaster } from "react-hot-toast";
 import ErrorBoundary from "./ErrorBoundary";
@@ -30,6 +31,7 @@ const Dashboard = () => {
                 <Route path="/positions" element={<Positions />} />
                 <Route path="/funds" element={<Funds />} />
                 <Route path="/apps" element={<Apps />} />
+                <Route path="/analytics" element={<PortfolioAnalytics />} />
               </Routes>
             </ErrorBoundary>
           </div>

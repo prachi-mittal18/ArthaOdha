@@ -29,6 +29,20 @@ export const options = {
       display: true,
       text: "Holdings",
     },
+    tooltip: {
+      callbacks: {
+        label: function (context) {
+          const label = context.dataset.label || "";
+          const value = context.parsed.y.toFixed(2);
+          const quantities = context.dataset.quantities;
+          const lines = [`${label}: ₹${value}`];
+          if (quantities && quantities[context.dataIndex] !== undefined) {
+            lines.push(`Quantity: ${quantities[context.dataIndex]}`);
+          }
+          return lines;
+        },
+      },
+    },
   },
 };
 

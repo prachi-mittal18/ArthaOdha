@@ -3,11 +3,7 @@ import api from "../api/api";
 import Home from "./Home";
 
 const PrivateRoute = () => {
-  const [authStatus, setAuthStatus] = useState(() => {
-    // Auth Strategy: Token is stored in HTTP-only cookie for secure backend requests
-    // and localStorage for optimistic UI rendering/state.
-    return localStorage.getItem("token") ? true : null;
-  });
+  const [authStatus, setAuthStatus] = useState(null);
 
   useEffect(() => {
     // Verify JWT via backend endpoint

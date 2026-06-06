@@ -77,6 +77,17 @@ const Menu = () => {
             </Link>
           </li>
           <li>
+            <Link
+              style={{ textDecoration: "none" }}
+              to="/analytics"
+              onClick={() => {
+                handleMenuClick(6);
+              }}
+            >
+              <p className={selectedMenu===6? activeMenuClass: menuClass}>Analytics</p>
+            </Link>
+          </li>
+          <li>
              <Link
               style={{ textDecoration: "none" }}
               to="/holdings"

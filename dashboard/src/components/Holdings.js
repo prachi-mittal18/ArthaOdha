@@ -1,4 +1,5 @@
 import React, { useContext } from "react";
+import { Link } from "react-router-dom";
 import UserContext from "./UserContext";
 import { VerticalGraph } from "./VerticalGraph";
 import Skeleton from "@mui/material/Skeleton";
@@ -79,13 +80,19 @@ const Holdings = () => {
         label: "Stock Price",
         data: allHoldings.map((stock) => stock.price),
         backgroundColor: "rgba(255, 99, 132, 0.5)",
+        quantities: allHoldings.map((stock) => stock.qty),
       },
     ],
   };
 
   return (
     <>
-      <h3 className="title">Holdings ({allHoldings.length})</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h3 className="title" style={{ margin: 0 }}>Holdings ({allHoldings.length})</h3>
+        <Link to="/analytics" className="btn btn-blue" style={{ textDecoration: "none", fontSize: "13px", padding: "8px 16px" }}>
+          View Analytics
+        </Link>
+      </div>
 
       <div className="order-table">
         <table>

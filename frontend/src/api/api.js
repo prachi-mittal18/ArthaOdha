@@ -10,21 +10,7 @@ const api = axios.create({
   },
 });
 
-// 2. Request Interceptor: Automatically attach tokens if using localStorage
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// 3. Response Interceptor: Handle global errors like 401 Unauthorized
+// 2. Response Interceptor: Handle global errors like 401 Unauthorized
 api.interceptors.response.use(
   (response) => {
     // Pass successful responses through
@@ -38,8 +24,6 @@ api.interceptors.response.use(
                             error.config.url.includes("/verify");
 
       if (status === 401) {
-        localStorage.removeItem("token");
-
         // Only redirect if this wasn't a deliberate auth check/attempt
         // and we aren't already on the login page
         if (!isAuthRequest && !window.location.pathname.includes("/login")) {

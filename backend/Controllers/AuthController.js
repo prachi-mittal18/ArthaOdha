@@ -21,13 +21,14 @@ module.exports.Signup = async (req, res, next) => {
         httpOnly: true,
         sameSite: "lax",
         secure: false,
+        path: "/",
       });
     // Remove sensitive data before sending
     const userResponse = user.toObject();
     delete userResponse.password;
     return res
       .status(201)
-      .json({ message: "User signed in successfully", success: true, user: userResponse, token });
+      .json({ message: "User signed in successfully", success: true, user: userResponse });
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Signup Error:`, error.message);
     return res.status(500).json({ message: "Internal Server Error", success: false });
@@ -59,14 +60,24 @@ module.exports.Login = async (req, res, next) => {
         httpOnly: true,
         sameSite: "lax",
         secure: false,
+        path: "/",
       });
        return res.status(200).json({ 
          message: "User logged in successfully", 
-         success: true,
-         token // Return token so frontend can save to localStorage
+         success: true
        });
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Login Error:`, error.message);
       return res.status(500).json({ message: "Internal Server Error", success: false });
     }
   }
+
+module.exports.Logout = (req, res) => {
+  res.cookie("token", "", {
+    httpOnly: true,
+    expires: new Date(0), // Expire immediately
+    sameSite: "lax",
+    secure: false, // Set to true in production with HTTPS
+  });
+  return res.status(200).json({ message: "Logged out successfully", success: true });
+};
