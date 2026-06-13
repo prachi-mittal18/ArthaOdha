@@ -5,7 +5,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-const FinnhubService = require("./services/FinnhubService");
+const AngelOneService = require("./services/AngelOneService");
 const axios = require("axios");
 
 const { HoldingsModel } = require("./model/HoldingsModel");
@@ -23,42 +23,71 @@ const toCents = (amount) => Math.round(Number(amount) * 100);
 const fromCents = (cents) => Number((cents / 100).toFixed(2));
 
 
-// Mapping internal tickers to Finnhub NSE Symbols
+// Mapping internal tickers to Angel One NSE Symbols/Tokens
 const watchlistMap = {
-  "INFY": "INFY.NS", "TCS": "TCS.NS", "RELIANCE": "RELIANCE.NS",
-  "BHARTIARTL": "BHARTIARTL.NS", "HDFCBANK": "HDFCBANK.NS", "ITC": "ITC.NS",
-  "TATAPOWER": "TATAPOWER.NS", "WIPRO": "WIPRO.NS", "M&M": "M&M.NS",
-  "HINDUNILVR": "HINDUNILVR.NS", "SBIN": "SBIN.NS", "KPITTECH": "KPITTECH.NS",
-  "QUICKHEAL": "QUICKHEAL.NS", "ONGC": "ONGC.NS", "ICICIBANK": "ICICIBANK.NS",
-  "AXISBANK": "AXISBANK.NS", "KOTAKBANK": "KOTAKBANK.NS", "LT": "LT.NS",
-  "BAJFINANCE": "BAJFINANCE.NS", "MARUTI": "MARUTI.NS", "SUNPHARMA": "SUNPHARMA.NS",
-  "DRREDDY": "DRREDDY.NS", "CIPLA": "CIPLA.NS", "DIVISLAB": "DIVISLAB.NS",
-  "NESTLEIND": "NESTLEIND.NS", "TITAN": "TITAN.NS", "ULTRACEMCO": "ULTRACEMCO.NS",
-  "ASIANPAINT": "ASIANPAINT.NS", "BAJAJFINSV": "BAJAJFINSV.NS", "TECHM": "TECHM.NS",
-  "HCLTECH": "HCLTECH.NS", "POWERGRID": "POWERGRID.NS", "NTPC": "NTPC.NS",
-  "COALINDIA": "COALINDIA.NS", "GRASIM": "GRASIM.NS", "JSWSTEEL": "JSWSTEEL.NS",
-  "TATASTEEL": "TATASTEEL.NS", "HINDALCO": "HINDALCO.NS", "ADANIENT": "ADANIENT.NS",
-  "ADANIPORTS": "ADANIPORTS.NS"
+  "RELIANCE": "2885",
+  "TCS": "11536",
+  "INFY": "1594",
+  "HDFCBANK": "1333",
+  "ICICIBANK": "4963",
+  "SBIN": "3045",
+  "BHARTIARTL": "10604",
+  "ITC": "1660",
+  "AXISBANK": "5900",
+  "WIPRO": "3787",
+  "LT": "11483",
+  "HINDUNILVR": "1394"
 };
 
 // Simulated Live Price Ticker initialization
 let currentPrices = {};
+const lastLiveUpdate = {};
 ["NIFTY 50", "SENSEX", ...Object.keys(watchlistMap)].forEach(ticker => {
   const basePrices = {
-    "NIFTY 50": 23000.45, "SENSEX": 75000.85, "INFY": 1264.80, "TCS": 3850.50,
-    "RELIANCE": 2500.10, "BHARTIARTL": 540.60, "HDFCBANK": 1520.30, "ITC": 205.15,
-    "TATAPOWER": 120.40, "WIPRO": 570.80, "M&M": 779.80,
-    "HINDUNILVR": 2417.40, "SBIN": 430.20, "KPITTECH": 266.45, "QUICKHEAL": 160.00,
-    "ONGC": 116.80, "ICICIBANK": 900.00, "AXISBANK": 850.00, "KOTAKBANK": 1800.00,
-    "LT": 2200.00, "BAJFINANCE": 6000.00, "MARUTI": 8500.00, "SUNPHARMA": 950.00,
-    "DRREDDY": 4500.00, "CIPLA": 1100.00, "DIVISLAB": 3500.00, "NESTLEIND": 19000.00,
-    "TITAN": 2500.00, "ULTRACEMCO": 7000.00, "ASIANPAINT": 2800.00, "BAJAJFINSV": 1400.00,
-    "TECHM": 1000.00, "HCLTECH": 1100.00, "POWERGRID": 220.00, "NTPC": 170.00,
-    "COALINDIA": 210.00, "GRASIM": 1600.00, "JSWSTEEL": 700.00, "TATASTEEL": 110.00,
-    "HINDALCO": 400.00, "ADANIENT": 2400.00, "ADANIPORTS": 700.00
+    "NIFTY 50": 23000.45, "SENSEX": 75000.85,
+    "RELIANCE": 2950.00, "TCS": 3850.00, "INFY": 1560.00, "HDFCBANK": 1600.00, 
+    "ICICIBANK": 1120.00, "SBIN": 830.00, "BHARTIARTL": 1420.00, "ITC": 430.00,
+    "AXISBANK": 1180.00, "WIPRO": 480.00, "LT": 3550.00, "HINDUNILVR": 2450.00
   };
   currentPrices[ticker] = fromCents(toCents(basePrices[ticker] || 100.00));
 });
+
+/**
+ * Fetches current prices for all symbols from the REST API to ensure 
+ * the dashboard has live data immediately upon startup, before the 
+ * first WebSocket trade event occurs.
+ */
+const fetchInitialQuotes = async () => {
+  if (!process.env.ANGEL_ONE_API_KEY) return;
+  const symbols = [...new Set(Object.values(watchlistMap))];
+  console.log(`[${new Date().toISOString()}] INFO: Syncing initial prices with Angel One REST API...`);
+  
+  try {
+    const response = await angelOne.smartApi.marketData({
+      mode: "LTP",
+      exchangeTokens: {
+        "NSE": symbols
+      }
+    });
+
+    if (response && response.status && response.data && response.data.fetched) {
+      for (const item of response.data.fetched) {
+        const symbolToken = item.symbolToken;
+        const livePrice = Number(item.ltp);
+
+        const internalTickers = Object.keys(watchlistMap).filter(t => watchlistMap[t] === symbolToken);
+        for (const ticker of internalTickers) {
+          currentPrices[ticker] = livePrice;
+          await HoldingsModel.updateMany({ name: ticker }, { $set: { price: livePrice } })
+            .catch(e => console.error(`[${new Date().toISOString()}] ERROR: Startup DB sync failed for ${ticker}:`, e.message));
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`[${new Date().toISOString()}] WARN: Initial quote fetch failed:`, error.message);
+  }
+  console.log(`[${new Date().toISOString()}] INFO: Initial price sync complete.`);
+};
 
 // Normalize process.env to handle spaces in keys or values from manual .env edits
 Object.keys(process.env).forEach((key) => {
@@ -128,49 +157,67 @@ app.get("/user/pnl-trend", userVerification, async (req, res) => {
     const holdings = await HoldingsModel.find({ user: req.user.id });
     if (!holdings.length) return res.status(200).json({ labels: [], data: [] });
 
-    const to = Math.floor(Date.now() / 1000);
-    const from = to - 10 * 24 * 60 * 60; // Fetch 10 days to ensure 7 trading days
-    const trendMap = {}; // date -> totalPnL
+    // Format to YYYY-MM-DD HH:MM
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day} 09:15`;
+    };
 
-    // Generate stable date keys for the mock fallback
+    const toDateObj = new Date();
+    const fromDateObj = new Date();
+    fromDateObj.setDate(fromDateObj.getDate() - 10);
+
+    const fromdate = formatDate(fromDateObj);
+    const todate = formatDate(toDateObj);
+    const trendMap = {}; 
+
     const dates = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().split('T')[0]); // Use YYYY-MM-DD for stable keys
+      dates.push(d.toISOString().split('T')[0]);
     }
 
     let fallbackTriggered = false;
 
-    // Sequential fetch for demo; in production, use a caching layer or batch service
     for (const stock of holdings) {
-      const symbol = watchlistMap[stock.name] || `${stock.name}.NS`;
+      // Throttle: Wait 350ms between requests to stay under 3req/sec limit
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      const symboltoken = watchlistMap[stock.name];
+      if (!symboltoken) {
+        fallbackTriggered = true;
+        continue;
+      }
       try {
-        const response = await axios.get(`https://finnhub.io/api/v1/stock/candle`, {
-          params: { symbol, resolution: 'D', from, to, token: process.env.FINNHUB_API_KEY }
+        const response = await angelOne.smartApi.getCandleData({
+          exchange: "NSE",
+          symboltoken,
+          interval: "DAY",
+          fromdate,
+          todate
         });
 
-        // Fallback for 403/No Data: Generate mock historical trend if API is restricted
-        if (!response.data || response.data.s === "no_data" || !response.data.c) {
-          throw new Error("API restricted or no data");
+        if (!response || !response.status || !response.data || response.data.length === 0) {
+          throw new Error("No data returned from Angel One");
         }
 
-        response.data.c.forEach((price, idx) => {
-          const date = new Date(response.data.t[idx] * 1000).toISOString().split('T')[0];
+        response.data.forEach((candle) => {
+          const date = candle[0].split('T')[0];
+          const price = Number(candle[4]);
           const pnl = (price - stock.avg) * stock.qty;
           trendMap[date] = (trendMap[date] || 0) + pnl;
         });
       } catch (e) { 
         fallbackTriggered = true;
         
-        // Generate stable mock historical P&L based on current price
         const currentPrice = currentPrices[stock.name] || stock.avg;
         const tickerHash = stock.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
-        // Ensure every date in our range has a value even if API fails
         dates.forEach((date, i) => {
-          // Deterministic variance based on ticker name and day index to stop graph jitter
-          const variance = ((tickerHash * (i + 1)) % 40) / 1000; // 0 to 0.04 (4% range)
+          const variance = ((tickerHash * (i + 1)) % 40) / 1000;
           const direction = (tickerHash % 2 === 0) ? 1 : -1;
           const mockHistoricalPrice = currentPrice * (1 + (direction * variance));
 
@@ -181,13 +228,10 @@ app.get("/user/pnl-trend", userVerification, async (req, res) => {
     }
 
     if (fallbackTriggered) {
-      console.info(`[${new Date().toISOString()}] INFO: P&L Trend generated using deterministic mock fallback (API restricted).`);
+      console.info(`[${new Date().toISOString()}] INFO: P&L Trend generated using deterministic mock fallback.`);
     }
 
-    // Sort by string comparison (works for YYYY-MM-DD) or date parsing
     const sortedDates = Object.keys(trendMap).sort().slice(-7);
-    
-    // Format labels for the frontend: "Jun 1", "Jun 2", etc.
     const labels = sortedDates.map(d => new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' }));
     const data = sortedDates.map(d => fromCents(toCents(trendMap[d])));
 
@@ -449,29 +493,28 @@ const processPendingOrders = async (targetTicker = null) => {
   }
 };
 
-// --- Finnhub WebSocket Integration ---
-let isFinnhubConnected = false;
+// --- Angel One WebSocket Integration ---
+let isAngelOneConnected = false;
 // Track pending batch emission to ensure io.emit is called exactly once per trade batch
 let batchEmitScheduled = false;
 // Track pending order processing per ticker to avoid DB spam on high-volume trade ticks
 const pendingTickerExecution = new Set();
 
-const handleTradeUpdate = async (symbol, price) => {
-  // Find all internal names mapped to this symbol (e.g., both HUL and HINDUNILVR)
-  const internalTickers = Object.keys(watchlistMap).filter(key => watchlistMap[key] === symbol);
+const handleTradeUpdate = async (token, price) => {
+  // Find all internal names mapped to this token
+  const internalTickers = Object.keys(watchlistMap).filter(key => watchlistMap[key] === token);
   
   if (internalTickers.length === 0) {
-    console.warn(`[${new Date().toISOString()}] WS_WARN: Received trade for unmapped symbol: ${symbol}`);
+    console.warn(`[${new Date().toISOString()}] WS_WARN: Received trade for unmapped token: ${token}`);
     return;
   }
 
   const priceCents = toCents(price);
   const safePrice = fromCents(priceCents);
 
-  console.log(`[${new Date().toISOString()}] TRADE_UPDATE: Symbol ${symbol} resolved to [${internalTickers.join(", ")}] at price ${safePrice}`);
-
   for (const ticker of internalTickers) {
     currentPrices[ticker] = safePrice;
+    lastLiveUpdate[ticker] = Date.now(); // Mark as receiving live data
     
     // Debounce order processing per ticker: wait for the next tick to aggregate trades
     if (!pendingTickerExecution.has(ticker)) {
@@ -496,18 +539,27 @@ const handleTradeUpdate = async (symbol, price) => {
 
 const uniqueSymbols = [...new Set(Object.values(watchlistMap))];
 
-const finnhub = new FinnhubService(
-  process.env.FINNHUB_API_KEY,
+const angelOne = new AngelOneService(
+  process.env.ANGEL_ONE_API_KEY,
+  process.env.ANGEL_ONE_CLIENT_ID,
+  process.env.ANGEL_ONE_PASSWORD,
+  process.env.ANGEL_ONE_TOTP_SECRET,
   uniqueSymbols,
   handleTradeUpdate,
   (status) => {
-    console.log(`[${new Date().toISOString()}] INFO: Finnhub connection status changed to: ${status ? "CONNECTED" : "DISCONNECTED"}`);
-    isFinnhubConnected = status;
+    console.log(`[${new Date().toISOString()}] INFO: Angel One connection status changed to: ${status ? "CONNECTED" : "DISCONNECTED"}`);
+    isAngelOneConnected = status;
     io.emit("connectionStatus", { isLive: status });
+    if (status) {
+      // Sync initial prices once connected
+      fetchInitialQuotes();
+    }
   }
 );
 
 // --- Hybrid Fallback & Heartbeat ---
+let dbSyncCounter = 0;
+
 setInterval(() => {
   // 1. Always simulate Indices (NIFTY/SENSEX) as they are often restricted on free stock streams
   ["NIFTY 50", "SENSEX"].forEach(ticker => {
@@ -516,23 +568,41 @@ setInterval(() => {
   });
 
   // 2. Resilience: If WS is down, resume simulation for all stocks
-  if (!isFinnhubConnected) {
-    Object.keys(currentPrices).forEach((ticker) => {
-      if (ticker === "NIFTY 50" || ticker === "SENSEX") return;
+  Object.keys(currentPrices).forEach((ticker) => {
+    if (ticker === "NIFTY 50" || ticker === "SENSEX") return;
+    
+    // Simulate if WS is down OR the specific stock hasn't moved in 30s (non-live symbol)
+    const lastUpdate = lastLiveUpdate[ticker] || 0;
+    if (!isAngelOneConnected || (Date.now() - lastUpdate > 30000)) {
       const volatility = 0.001; 
       const change = (Math.random() * volatility) - (volatility / 2);
       currentPrices[ticker] = fromCents(toCents(currentPrices[ticker] * (1 + change)));
-    });
-    processPendingOrders();
-  }
+    }
+  });
+  processPendingOrders();
 
   io.emit("priceUpdate", currentPrices);
+
+  // Throttled DB Synchronization: Update holdings prices every 30 seconds (15 ticks)
+  // This ensures the DB reflects the "Last Known Price" for user sessions 
+  // without causing excessive write load on every individual trade event.
+  dbSyncCounter++;
+  if (dbSyncCounter >= 15) {
+    dbSyncCounter = 0;
+    Object.keys(currentPrices).forEach(ticker => {
+      if (ticker === "NIFTY 50" || ticker === "SENSEX") return;
+      HoldingsModel.updateMany({ name: ticker }, { $set: { price: currentPrices[ticker] } })
+        .catch(err => console.error(`[${new Date().toISOString()}] ERROR: Background DB sync failed for ${ticker}:`, err.message));
+    });
+  }
 }, 2000);
 
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
-  // Send current Finnhub status to the new user immediately
-  socket.emit("connectionStatus", { isLive: isFinnhubConnected });
+  // Send current Angel One status to the new user immediately
+  socket.emit("connectionStatus", { isLive: isAngelOneConnected });
+  // Send current prices immediately so the dashboard doesn't show hardcoded fallbacks
+  socket.emit("priceUpdate", currentPrices);
 
   socket.on("disconnect", () => {
     console.log("User disconnected");
@@ -550,9 +620,9 @@ server.on('error', (e) => {
 server.listen(PORT, () => {
   console.log(`[${new Date().toISOString()}] Server is running on port ${PORT}`);
   
-  // Start Finnhub connection only after server is successfully bound to the port
-  console.log(`[${new Date().toISOString()}] INFO: Initializing Finnhub with ${uniqueSymbols.length} symbols.`);
-  finnhub.connect();
+  // Start Angel One connection only after server is successfully bound to the port
+  console.log(`[${new Date().toISOString()}] INFO: Initializing Angel One with ${uniqueSymbols.length} symbols.`);
+  angelOne.connect();
 
   if (!url) {
     console.error(`[${new Date().toISOString()}] FATAL: MONGO_URL is not defined in .env file.`);

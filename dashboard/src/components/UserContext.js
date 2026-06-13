@@ -5,11 +5,18 @@ import { io } from "socket.io-client";
 const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  const [userData, setUserData] = useState({ username: "User", email: "", balance: 0, marginUsed: 0, openingBalance: 0 });
+  const [userData, setUserData] = useState({ 
+    username: "User", 
+    email: "", 
+    balance: 0, 
+    marginUsed: 0, 
+    openingBalance: 0,
+    hasTradingPin: false 
+  });
   const [allHoldings, setAllHoldings] = useState([]);
   const [prices, setPrices] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isFinnhubLive, setIsFinnhubLive] = useState(false);
+  const [isLive, setIsLive] = useState(false);
   const socket = useRef(null);
 
   const fetchUserData = async () => {
@@ -25,7 +32,8 @@ export const UserProvider = ({ children }) => {
           email: verifyRes.data.email,
           balance: fundsRes.data.balance,
           marginUsed: fundsRes.data.marginUsed,
-          openingBalance: fundsRes.data.openingBalance
+          openingBalance: fundsRes.data.openingBalance,
+          hasTradingPin: verifyRes.data.hasTradingPin
         });
       }
     } catch (err) {
@@ -52,7 +60,7 @@ export const UserProvider = ({ children }) => {
     });
 
     socket.current.on("connectionStatus", (data) => {
-      setIsFinnhubLive(data.isLive);
+      setIsLive(data.isLive);
     });
 
     return () => {
@@ -78,7 +86,7 @@ export const UserProvider = ({ children }) => {
         isLoading,
         refreshUserData: fetchUserData,
         refreshHoldings: fetchHoldings,
-        isFinnhubLive,
+        isLive,
         socket: socket.current,
       }}
     >
